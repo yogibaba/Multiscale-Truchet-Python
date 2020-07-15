@@ -1,20 +1,13 @@
-import io
 import random as rnd
-from copy import deepcopy
 from itertools import product
 
 import cairosvg
 import svgwrite
-from PIL import Image
 
-from tiles import collect_tiles
-
-L = 400
-STRIDE = L * 3
-TILE_SIZE = L * 5
+from tiles import TILE_PARAMS, add_tile
 
 
-def define_frame(col, row, max_depth):
+def decide_frame_position(col, row, max_depth):
     """タイルの位置(座標)を決める
     Args:
         col (int): 列数
@@ -23,7 +16,7 @@ def define_frame(col, row, max_depth):
     Returns:
         list<list<tuple>>: サイズごとの枠線座標リスト
     """
-    coordinates = []
+    frame_positions = []
 
     # 一番大きいタイルを詰める
     coords = []
@@ -43,99 +36,75 @@ def define_frame(col, row, max_depth):
             for j, k in product(range(2), range(2)):
                 coords += [(x + tile_size * j, y + tile_size * k)]
 
-        coordinates.append(last_coords)
+        frame_positions.append(last_coords)
         # break
 
-    coordinates.append(coords)
+    frame_positions.append(coords)
 
-    return coordinates
+    return frame_positions
 
 
-def draw_frame(coords_list, col, row, max_depth):
+def draw_frame(frame_positions, col, row, max_depth):
     """枠線を画像出力
     Args:
-        coords_list (list): サイズごとの枠線座標リスト
+        frame_positions (list): サイズごとの枠線座標リスト
         col (int): 列数
         row (int): 行数
         max_depth (int): タイル分割数
     """
-    W, H = STRIDE * col + L * 2, STRIDE * row + L * 2
-    dwg = svgwrite.Drawing(size=(W, H))
-    scale = STRIDE / 2**max_depth
+    dwg = svgwrite.Drawing()
 
-    for i, coords in enumerate(coords_list):
-        size = STRIDE / 2**i
+    for i, coords in enumerate(frame_positions):
+        pad = 2**max_depth * 3
+        scale = 2**(max_depth - i)
+
         for x, y in coords:
             # 正方形を追加
             dwg.add(dwg.rect(
-                insert=(x * scale + L, y * scale + L),
-                size=(size, size),
+                insert=(x * 6 + pad, y * 6 + pad),
+                size=(6 * scale, 6 * scale),
                 fill='none', stroke='white',
-                stroke_width=10,
+                stroke_width=0.5,
             ))
 
+    # 範囲設定
+    dwg['width'] = (6 * col + 6) * 2**max_depth
+    dwg['height'] = (6 * row + 6) * 2**max_depth
+
     cairosvg.svg2png(dwg.tostring().encode('utf-8'),
-                     write_to='frame.png',
-                     scale=2000 / W if W > 2000 else 1)
+                     write_to='frame.png', scale=2000 / dwg['width'])
 
 
-def svg2img(tile, colors, size):
-    """色・サイズ調整，型変換
-    Args:
-        tile (svgwrite.Drawing): svg
-        colors (list): 配色
-        size (int): 画像サイズ
-    Returns:
-        PIL.Image: img
-    """
-    dwg = deepcopy(tile)
+def draw_truchet(frame_positions, col, row, max_depth, colors):
+    dwg = svgwrite.Drawing()
+
+    for i, coords in enumerate(frame_positions):
+        pad = 2**max_depth * 3 - 2**(max_depth - i) * 2
+        scale = 2**(max_depth - i)
+
+        for x, y in coords:
+            type_num, rotate_num = rnd.choice(TILE_PARAMS)
+            add_tile(dwg, type_num, rotate_num, scale=scale,
+                     pos=(x * 6 + pad, y * 6 + pad), swap_color=i % 2)
+
+    # 範囲設定
+    dwg['width'] = (6 * col + 6) * 2**max_depth
+    dwg['height'] = (6 * row + 6) * 2**max_depth
 
     # 色設定
     dwg.add(dwg.style(f'''
-            .color-1 {{fill: {colors[0]};}}
-            .color-2 {{fill: {colors[1]};}}
-        '''))
+        .color-1 {{fill: {colors[0]};}}
+        .color-2 {{fill: {colors[1]};}}
+    '''))
 
-    # 型変換 (svgwrite.Drawing -> PIL.Image)
-    png_bin = cairosvg.svg2png(dwg.tostring().encode('utf-8'),
-                               scale=size / 500)
-    img = Image.open(io.BytesIO(png_bin))
-
-    # dwg.saveas('tile.svg', pretty=True, indent=2)
-    # img.save('tile.png')
-    return img
-
-
-def draw_truchet(coordinates, col, row, max_depth, colors):
-    # ベース画像
-    W, H = STRIDE * col + L * 2, STRIDE * row + L * 2
-    base_img = Image.new(mode='RGBA', size=(W, H), color=(0, 0, 0, 255))
-    # タイルリスト
-    tiles = collect_tiles()
-
-    scale = round(STRIDE / 2**max_depth)
-    for i, coords in enumerate(coordinates):
-        size = round(TILE_SIZE / 2**i)
-        pad = round(L - L / 2**i)
-
-        for x, y in coords:
-            # タイル選択
-            tile = rnd.choice(tiles)
-            # 色・サイズ調整，型変換
-            tile = svg2img(tile, colors if i % 2 else colors[::-1], size)
-            # ペースト
-            base_img.alpha_composite(tile, (x * scale + pad, y * scale + pad))
-
-    if W > 2000:
-        scale = 2000 / W
-        base_img = base_img.resize((round(W * scale), round(H * scale)))
-    base_img.save('truchet.png')
+    cairosvg.svg2png(dwg.tostring().encode('utf-8'),
+                     write_to='truchet.png', scale=2000 / dwg['width'])
 
 
 def main(col=5, row=5, max_depth=4, colors=('white', 'black')):
-    coordinates = define_frame(col, row, max_depth)
-    draw_frame(coordinates, col, row, max_depth)
-    draw_truchet(coordinates, col, row, max_depth, colors)
+    frame_positions = decide_frame_position(col, row, max_depth)
+    draw_frame(frame_positions, col, row, max_depth)
+    draw_truchet(frame_positions, col, row, max_depth, colors)
 
 
 if __name__ == '__main__':

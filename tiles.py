@@ -1,156 +1,165 @@
 import cairosvg
 import svgwrite
 
-N_TYPES = 7  # タイル種類数
-N_ROTATIONS = (2, 2, 1, 1, 1, 4, 4)  # 各種類の回転数
+N_TILE_TYPES = (2, 2, 1, 1, 1, 4, 4)  # 各タイルの種類数
+# パラメータ(type_num, rotate_num)
+TILE_PARAMS = [(i, j)
+               for i, n_types in enumerate(N_TILE_TYPES)
+               for j in range(n_types)]
 
 
-def create_tile(type_num, rotate_num):
-    """タイル作成
-    Args:
-        type_num (int): 種類番号
-        rotate_num (int): 90°回転の回数, 0~3
-    Returns:
-        svgwrite.Drawing
-    """
-    dwg = svgwrite.Drawing(size=(500, 500))
+class Mover:
+    """座標を線形移動"""
 
-    g1 = dwg.g(class_='color-1')
-    g1.add(dwg.rect(insert=(100, 100), size=(300, 300)))
-    g1.add(dwg.circle(center=(100, 100), r=100))
-    g1.add(dwg.circle(center=(100, 400), r=100))
-    g1.add(dwg.circle(center=(400, 100), r=100))
-    g1.add(dwg.circle(center=(400, 400), r=100))
+    def __init__(self, scale, bias):
+        self.scale = scale
+        self.bias = bias
+
+    def move(self, x, y):
+        bx, by = self.bias
+        return (x * self.scale + bx, y * self.scale + by)
+
+    def move_path(self, path):
+        bx, by = self.bias
+        p = path.split()
+        if p[0] in ('M', 'L'):
+            p[1] = int(p[1]) * self.scale + bx
+            p[2] = int(p[2]) * self.scale + by
+        elif p[0] == 'A':
+            p[1] = int(p[1]) * self.scale
+            p[2] = int(p[2]) * self.scale
+            p[-2] = int(p[-2]) * self.scale + bx
+            p[-1] = int(p[-1]) * self.scale + by
+        return ' '.join(map(str, p))
+
+
+def add_tile(dwg, type_num, rotate_num, scale=1, pos=(0, 0), swap_color=False):
+    m = Mover(scale, pos)
+
+    class_1 = 'color-1' if not swap_color else 'color-2'
+    class_2 = 'color-2' if not swap_color else 'color-1'
+
+    g1 = dwg.g(class_=class_1)
+    g1.add(dwg.rect(insert=m.move(2, 2), size=(6 * scale,) * 2))
+    g1.add(dwg.circle(center=m.move(2, 2), r=2 * scale))
+    g1.add(dwg.circle(center=m.move(2, 8), r=2 * scale))
+    g1.add(dwg.circle(center=m.move(8, 2), r=2 * scale))
+    g1.add(dwg.circle(center=m.move(8, 8), r=2 * scale))
     dwg.add(g1)
 
-    g2 = dwg.g(class_='color-2')
+    # 回転角度・中心
+    deg = 90 * rotate_num
+    cx, cy = 5 * scale + pos[0], 5 * scale + pos[1]
+
+    g2 = dwg.g(class_=class_2, transform=f'rotate({deg},{cx},{cy})')
     if type_num == 0:
         g2.add(dwg.path(
-            d='M 200 100\n\
-            A 50 50 0 0 1 300 100\n\
-            A 200 200 0 0 1 100 300\n\
-            A 50 50 0 0 1 100 200\n\
-            A 100 100 0 0 0 200 100\n\
-            Z'
+            d=m.move_path('M 4 2') +
+            m.move_path('A 1 1 0 0 1 6 2') +
+            m.move_path('A 4 4 0 0 1 2 6') +
+            m.move_path('A 1 1 0 0 1 2 4') +
+            m.move_path('A 2 2 0 0 0 4 2') +
+            'Z'
         ))
         g2.add(dwg.path(
-            d='M 400 200\n\
-            A 50 50 0 0 1 400 300\n\
-            A 100 100 0 0 0 300 400\n\
-            A 50 50 0 0 1 200 400\n\
-            A 200 200 0 0 1 400 200\n\
-            Z'
+            d=m.move_path('M 8 4') +
+            m.move_path('A 1 1 0 0 1 8 6') +
+            m.move_path('A 2 2 0 0 0 6 8') +
+            m.move_path('A 1 1 0 0 1 4 8') +
+            m.move_path('A 4 4 0 0 1 8 4') +
+            'Z'
         ))
 
     elif type_num == 1:
-        g2.add(dwg.circle(center=(250, 100), r=50))
-        g2.add(dwg.circle(center=(250, 400), r=50))
+        g2.add(dwg.circle(center=m.move(5, 2), r=scale))
+        g2.add(dwg.circle(center=m.move(5, 8), r=scale))
         g2.add(dwg.path(
-            d='M 100 200\n\
-            L 400 200\n\
-            A 50 50 0 0 1 400 300\n\
-            L 100 300\n\
-            A 50 50 0 0 1 100 200\n\
-            Z'
+            d=m.move_path('M 2 4') +
+            m.move_path('L 8 4') +
+            m.move_path('A 1 1 0 0 1 8 6') +
+            m.move_path('L 2 6') +
+            m.move_path('A 1 1 0 0 1 2 4') +
+            'Z'
         ))
 
     elif type_num == 2:
-        g2.add(dwg.circle(center=(250, 100), r=50))
-        g2.add(dwg.circle(center=(100, 250), r=50))
-        g2.add(dwg.circle(center=(400, 250), r=50))
-        g2.add(dwg.circle(center=(250, 400), r=50))
+        g2.add(dwg.circle(center=m.move(5, 2), r=scale))
+        g2.add(dwg.circle(center=m.move(2, 5), r=scale))
+        g2.add(dwg.circle(center=m.move(8, 5), r=scale))
+        g2.add(dwg.circle(center=m.move(5, 8), r=scale))
 
     elif type_num == 3:
         g2.add(dwg.path(
-            d='M 200 100\n\
-            A 50 50 0 0 1 300 100\n\
-            A 100 100 0 0 0 400 200\n\
-            A 50 50 0 0 1 400 300\n\
-            A 100 100 0 0 0 300 400\n\
-            A 50 50 0 0 1 200 400\n\
-            A 100 100 0 0 0 100 300\n\
-            A 50 50 0 0 1 100 200\n\
-            A 100 100 0 0 0 200 100\n\
-            Z'
+            d=m.move_path('M 4 2') +
+            m.move_path('A 1 1 0 0 1 6 2') +
+            m.move_path('A 2 2 0 0 0 8 4') +
+            m.move_path('A 1 1 0 0 1 8 6') +
+            m.move_path('A 2 2 0 0 0 6 8') +
+            m.move_path('A 1 1 0 0 1 4 8') +
+            m.move_path('A 2 2 0 0 0 2 6') +
+            m.move_path('A 1 1 0 0 1 2 4') +
+            m.move_path('A 2 2 0 0 0 4 2') +
+            'Z'
         ))
 
     elif type_num == 4:
         g2.add(dwg.path(
-            d='M 100 200\n\
-            L 400 200\n\
-            A 50 50 0 0 1 400 300\n\
-            L 100 300\n\
-            A 50 50 0 0 1 100 200\n\
-            Z'
+            d=m.move_path('M 2 4') +
+            m.move_path('L 8 4') +
+            m.move_path('A 1 1 0 0 1 8 6') +
+            m.move_path('L 2 6') +
+            m.move_path('A 1 1 0 0 1 2 4') +
+            'Z'
         ))
         g2.add(dwg.path(
-            d='M 200 100\n\
-            L 200 400\n\
-            A 50 50 0 0 0 300 400\n\
-            L 300 100\n\
-            A 50 50 0 0 0 200 100\n\
-            Z'
+            d=m.move_path('M 4 2') +
+            m.move_path('L 4 8') +
+            m.move_path('A 1 1 0 0 0 6 8') +
+            m.move_path('L 6 2') +
+            m.move_path('A 1 1 0 0 0 4 2') +
+            'Z'
         ))
 
     elif type_num == 5:
         g2.add(dwg.path(
-            d='M 200 100\n\
-            A 50 50 0 0 1 300 100\n\
-            A 200 200 0 0 1 100 300\n\
-            A 50 50 0 0 1 100 200\n\
-            A 100 100 0 0 0 200 100\n\
-            Z'
+            d=m.move_path('M 4 2') +
+            m.move_path('A 1 1 0 0 1 6 2') +
+            m.move_path('A 4 4 0 0 1 2 6') +
+            m.move_path('A 1 1 0 0 1 2 4') +
+            m.move_path('A 2 2 0 0 0 4 2') +
+            'Z'
         ))
-        g2.add(dwg.circle(center=(400, 250), r=50))
-        g2.add(dwg.circle(center=(250, 400), r=50))
+        g2.add(dwg.circle(center=m.move(8, 5), r=scale))
+        g2.add(dwg.circle(center=m.move(5, 8), r=scale))
 
     elif type_num == 6:
         g2.add(dwg.path(
-            d='M 200 100\n\
-            A 50 50 0 0 1 300 100\n\
-            A 100 100 0 0 0 400 200\n\
-            A 50 50 0 0 1 400 300\n\
-            L 100 300\n\
-            A 50 50 0 0 1 100 200\n\
-            A 100 100 0 0 0 200 100\n\
-            Z'
+            d=m.move_path('M 4 2') +
+            m.move_path('A 1 1 0 0 1 6 2') +
+            m.move_path('A 2 2 0 0 0 8 4') +
+            m.move_path('A 1 1 0 0 1 8 6') +
+            m.move_path('L 2 6') +
+            m.move_path('A 1 1 0 0 1 2 4') +
+            m.move_path('A 2 2 0 0 0 4 2') +
+            'Z'
         ))
-        g2.add(dwg.circle(center=(250, 400), r=50))
+        g2.add(dwg.circle(center=m.move(5, 8), r=scale))
 
     dwg.add(g2)
 
-    # 回転
-    if rotate_num:
-        deg = 90 * rotate_num
-        dwg.add(dwg.style(f'''
-            .color-2 {{transform: rotate({deg},250,250)}}
-        '''))
-
-    return dwg
-
-
-def collect_tiles():
-    """全タイルを生成，リスト化
-    Returns:
-        list<svgwrite.Drawing>: タイルのリスト
-    """
-    tiles = []
-    for type_num in range(N_TYPES):
-        for rotate_num in range(N_ROTATIONS[type_num]):
-            tiles.append(create_tile(type_num, rotate_num))
-
-    return tiles
-
 
 if __name__ == '__main__':
-    tiles = collect_tiles()
+    dwg = svgwrite.Drawing()
 
-    import os
-    os.makedirs('tiles', exist_ok=True)
-    for i, tile in enumerate(tiles):
-        tile.add(tile.style('''
-            .color-1 {fill: white;}
-            .color-2 {fill: black;}
-        '''))
-        cairosvg.svg2png(tile.tostring().encode('utf-8'),
-                         write_to=f'tiles/tile_{i}.png')
+    for i, (type_num, rotate_num) in enumerate(TILE_PARAMS):
+        add_tile(dwg, type_num, rotate_num,
+                 scale=1, pos=(10 * (i % 4), 10 * (i // 4)))
+
+    dwg.add(dwg.style('''
+        .color-1 {fill: white;}
+        .color-2 {fill: black;}
+    '''))
+    dwg['width'] = 40
+    dwg['height'] = 40
+    cairosvg.svg2png(dwg.tostring().encode('utf-8'),
+                     write_to='tiles.png', scale=50)
