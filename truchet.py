@@ -101,7 +101,7 @@ def draw_truchet(frame_positions, col, row, max_depth, colors):
                      write_to='truchet.png', scale=2000 / dwg['width'])
 
 
-def main(col=5, row=5, max_depth=4, colors=('white', 'black')):
+def main(col=5, row=5, max_depth=5, colors=('white', 'black')):
     frame_positions = decide_frame_position(col, row, max_depth)
     draw_frame(frame_positions, col, row, max_depth)
     draw_truchet(frame_positions, col, row, max_depth, colors)
