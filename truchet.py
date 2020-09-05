@@ -1,5 +1,6 @@
 import random as rnd
 from itertools import product
+from datetime import datetime
 
 import cairosvg
 import svgwrite
@@ -98,8 +99,7 @@ def draw_truchet(frame_positions, col, row, max_depth, colors):
     '''))
 
     cairosvg.svg2png(dwg.tostring().encode('utf-8'),
-                     write_to='truchet.png', scale=2000 / dwg['width'])
-
+                     write_to='{}-truchet.png'.format(datetime.now().strftime('%Y%m%d%H%M%S')), scale=2000 / dwg['width'])
 
 def main(col=5, row=5, max_depth=5, colors=('white', 'black')):
     frame_positions = decide_frame_position(col, row, max_depth)
